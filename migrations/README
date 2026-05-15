@@ -1,0 +1,8 @@
+"""Initial migration example."""
+# For running migrations, use: alembic upgrade head
+
+# To create a new migration:
+# alembic revision --autogenerate -m "description"
+
+# To downgrade:
+# alembic downgrade -1
