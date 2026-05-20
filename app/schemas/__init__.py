@@ -4,6 +4,8 @@ from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from app.schemas.snowflake import (
     SnowflakeConnectionRequest,
     SnowflakeMetadataResponse,
+    SnowflakeSQLGenerationRequest,
+    SnowflakeSQLGenerationResponse,
     SchemaMetadata,
     TableMetadata,
     ColumnMetadata,
@@ -19,6 +21,8 @@ __all__ = [
     "ProductUpdate",
     "SnowflakeConnectionRequest",
     "SnowflakeMetadataResponse",
+    "SnowflakeSQLGenerationRequest",
+    "SnowflakeSQLGenerationResponse",
     "SchemaMetadata",
     "TableMetadata",
     "ColumnMetadata",

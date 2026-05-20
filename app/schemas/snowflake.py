@@ -66,3 +66,38 @@ class SnowflakeMetadataResponse(BaseModel):
     extracted_at: datetime
     schemas: list[SchemaMetadata]
     relationships: list[RelationshipMetadata]
+
+
+class SnowflakeSQLGenerationRequest(BaseModel):
+    """Input payload to generate Snowflake SQL from natural language."""
+
+    prompt: str = Field(..., min_length=3, description="Natural language analytics request")
+    metadata: SnowflakeMetadataResponse = Field(
+        ...,
+        description="Schema metadata used to constrain SQL generation",
+    )
+    enforce_limit: bool = Field(
+        default=True,
+        description="Whether to enforce a row limit on generated SQL",
+    )
+    max_rows: int = Field(
+        default=1000,
+        ge=1,
+        le=100000,
+        description="Maximum allowed rows when limit is enforced",
+    )
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="OpenAI temperature for SQL generation",
+    )
+
+
+class SnowflakeSQLGenerationResponse(BaseModel):
+    """Validated Snowflake SQL generated from natural language."""
+
+    sql: str
+    model: str
+    validation_passed: bool
+    optimization_notes: list[str]
