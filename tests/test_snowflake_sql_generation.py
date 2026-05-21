@@ -43,6 +43,26 @@ def _build_metadata() -> SnowflakeMetadataResponse:
                                 ordinal_position=2,
                             ),
                         ],
+                    ),
+                    TableMetadata(
+                        name="CUSTOMERS",
+                        table_type="BASE TABLE",
+                        columns=[
+                            ColumnMetadata(
+                                name="ID",
+                                data_type="NUMBER",
+                                is_nullable=False,
+                                default=None,
+                                ordinal_position=1,
+                            ),
+                            ColumnMetadata(
+                                name="CUSTOMER_NAME",
+                                data_type="VARCHAR",
+                                is_nullable=True,
+                                default=None,
+                                ordinal_position=2,
+                            ),
+                        ],
                     )
                 ],
             )
@@ -131,6 +151,80 @@ def test_validate_sql_rejects_implicit_cross_join():
     with pytest.raises(SQLValidationError, match="cross-join"):
         service.validate_sql(
             sql="SELECT ORDER_ID FROM PUBLIC.ORDERS, PUBLIC.ORDERS",
+            metadata=metadata,
+            enforce_limit=False,
+            max_rows=1000,
+        )
+
+
+def test_validate_sql_accepts_join_matching_relationship():
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    metadata = _build_metadata()
+
+    result = service.validate_sql(
+        sql=(
+            "SELECT o.ORDER_ID, c.CUSTOMER_NAME "
+            "FROM PUBLIC.ORDERS o "
+            "JOIN PUBLIC.CUSTOMERS c ON o.CUSTOMER_ID = c.ID"
+        ),
+        metadata=metadata,
+        enforce_limit=False,
+        max_rows=1000,
+    )
+
+    assert "JOIN PUBLIC.CUSTOMERS" in result
+
+
+def test_validate_sql_rejects_join_not_matching_relationship():
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    metadata = _build_metadata()
+
+    with pytest.raises(SQLValidationError, match="does not match any known table relationship"):
+        service.validate_sql(
+            sql=(
+                "SELECT o.ORDER_ID, c.CUSTOMER_NAME "
+                "FROM PUBLIC.ORDERS o "
+                "JOIN PUBLIC.CUSTOMERS c ON o.ORDER_ID = c.ID"
+            ),
+            metadata=metadata,
+            enforce_limit=False,
+            max_rows=1000,
+        )
+
+
+def test_validate_sql_rejects_cross_join_keyword():
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    metadata = _build_metadata()
+
+    with pytest.raises(SQLValidationError, match="CROSS JOIN"):
+        service.validate_sql(
+            sql="SELECT o.ORDER_ID FROM PUBLIC.ORDERS o CROSS JOIN PUBLIC.CUSTOMERS c",
+            metadata=metadata,
+            enforce_limit=False,
+            max_rows=1000,
+        )
+
+
+def test_validate_sql_rejects_disallowed_operation_keyword():
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    metadata = _build_metadata()
+
+    with pytest.raises(SQLValidationError, match="disallowed operation keywords"):
+        service.validate_sql(
+            sql="SELECT ORDER_ID FROM PUBLIC.ORDERS EXECUTE IMMEDIATE 'DROP TABLE X'",
+            metadata=metadata,
+            enforce_limit=False,
+            max_rows=1000,
+        )
+
+
+def test_validate_sql_rejects_multiple_statements():
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    metadata = _build_metadata()
+
+    with pytest.raises(SQLValidationError, match="single SQL statement"):
+        service.validate_sql(
+            sql="SELECT ORDER_ID FROM PUBLIC.ORDERS; SELECT ID FROM PUBLIC.CUSTOMERS",
             metadata=metadata,
             enforce_limit=False,
             max_rows=1000,
@@ -239,5 +333,6 @@ def test_generate_sql_optimization_notes_include_snowflake_rules(monkeypatch):
 
     notes_text = " ".join(result.optimization_notes)
     assert "cross-join" in notes_text.lower()
+    assert "relationship" in notes_text.lower()
     assert "nullability" in notes_text.lower()
     assert "LIMIT 1000" in notes_text
