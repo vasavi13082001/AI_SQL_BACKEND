@@ -11,6 +11,11 @@ from app.schemas.snowflake import (
     ColumnMetadata,
     RelationshipMetadata,
 )
+from app.schemas.warehouse import (
+    WarehouseExecutionRequest,
+    WarehouseExecutionResult,
+    WarehouseType,
+)
 
 __all__ = [
     "UserCreate",
@@ -27,4 +32,7 @@ __all__ = [
     "TableMetadata",
     "ColumnMetadata",
     "RelationshipMetadata",
+    "WarehouseExecutionRequest",
+    "WarehouseExecutionResult",
+    "WarehouseType",
 ]
