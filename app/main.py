@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from app.config import get_settings
 from app.logging_config import setup_logging, get_logger
 from app.database import init_db, close_db
+import app.models  # noqa: F401
 from app.api.v1 import router as v1_router
 
 logger = get_logger(__name__)
