@@ -71,3 +71,27 @@ def test_extracts_last_year_range():
     assert result.date_range is not None
     assert result.date_range.start_date == "2025-01-01"
     assert result.date_range.end_date == "2025-12-31"
+
+
+def test_follow_up_query_carries_prior_intent_with_memory():
+    parser = NaturalLanguageQueryParser()
+
+    first = parser.parse(
+        "Show total revenue by region where status = active last 30 days",
+        reference_date=date(2026, 5, 19),
+    )
+    follow_up = parser.parse(
+        "Do the same for west",
+        reference_date=date(2026, 5, 19),
+        prior_queries=[first],
+    )
+
+    assert follow_up.memory_applied is True
+    assert "revenue" in follow_up.metrics
+    assert "region" in follow_up.dimensions
+    assert "sum" in follow_up.aggregations
+    assert any(f.field == "status" and f.value == "active" for f in follow_up.filters)
+    assert any(f.value == "west" for f in follow_up.filters)
+    assert follow_up.date_range is not None
+    assert follow_up.date_range.start_date == "2026-04-20"
+    assert follow_up.date_range.end_date == "2026-05-19"

@@ -1,6 +1,10 @@
 """Pydantic schemas for Snowflake metadata extraction."""
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+from app.schemas.warehouse import WarehouseType
 
 
 class SnowflakeConnectionRequest(BaseModel):
@@ -68,6 +72,20 @@ class SnowflakeMetadataResponse(BaseModel):
     relationships: list[RelationshipMetadata]
 
 
+class ConversationTurn(BaseModel):
+    """A prior conversational message used to resolve follow-up prompts."""
+
+    role: Literal["user", "assistant", "system"] = Field(
+        ...,
+        description="Role of the speaker for this turn",
+    )
+    message: str = Field(
+        ...,
+        min_length=1,
+        description="Natural language content or SQL text from the turn",
+    )
+
+
 class SnowflakeSQLGenerationRequest(BaseModel):
     """Input payload to generate Snowflake SQL from natural language."""
 
@@ -75,6 +93,20 @@ class SnowflakeSQLGenerationRequest(BaseModel):
     metadata: SnowflakeMetadataResponse = Field(
         ...,
         description="Schema metadata used to constrain SQL generation",
+    )
+    target_warehouse: WarehouseType = Field(
+        default=WarehouseType.SNOWFLAKE,
+        description="Warehouse dialect to target in generated SQL",
+    )
+    conversation_history: list[ConversationTurn] = Field(
+        default_factory=list,
+        description="Recent conversation turns for contextual follow-up generation",
+    )
+    max_schema_tables: int = Field(
+        default=25,
+        ge=1,
+        le=200,
+        description="Maximum number of most-relevant tables to inject into the prompt context",
     )
     enforce_limit: bool = Field(
         default=True,

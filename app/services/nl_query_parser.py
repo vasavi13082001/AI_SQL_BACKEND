@@ -35,6 +35,7 @@ class ParsedQuery:
     aggregations: list[str] = field(default_factory=list)
     date_range: DateRange | None = None
     original_query: str = ""
+    memory_applied: bool = False
 
 
 class NaturalLanguageQueryParser:
@@ -96,7 +97,12 @@ class NaturalLanguageQueryParser:
         ),
     ]
 
-    def parse(self, question: str, reference_date: date | None = None) -> ParsedQuery:
+    def parse(
+        self,
+        question: str,
+        reference_date: date | None = None,
+        prior_queries: list[ParsedQuery] | None = None,
+    ) -> ParsedQuery:
         """Parse a natural language question into structured query parts."""
         normalized = self._normalize_text(question)
         reference = reference_date or date.today()
@@ -107,6 +113,14 @@ class NaturalLanguageQueryParser:
         parsed.aggregations = self._extract_aggregations(normalized)
         parsed.filters = self._extract_filters(normalized)
         parsed.date_range = self._extract_date_range(normalized, reference)
+
+        if prior_queries:
+            parsed = self._merge_with_conversation_memory(
+                parsed=parsed,
+                normalized_query=normalized,
+                prior_queries=prior_queries,
+            )
+
         return parsed
 
     @staticmethod
@@ -253,3 +267,73 @@ class NaturalLanguageQueryParser:
             if any(keyword in phrase for keyword in keywords):
                 return canonical
         return "category"
+
+    def _merge_with_conversation_memory(
+        self,
+        parsed: ParsedQuery,
+        normalized_query: str,
+        prior_queries: list[ParsedQuery],
+    ) -> ParsedQuery:
+        """Carry forward intent from prior turns when the current turn is underspecified."""
+        latest_with_metrics = self._latest_non_empty(prior_queries, "metrics")
+        latest_with_dimensions = self._latest_non_empty(prior_queries, "dimensions")
+        latest_with_aggs = self._latest_non_empty(prior_queries, "aggregations")
+        latest_with_filters = self._latest_non_empty(prior_queries, "filters")
+        latest_with_dates = self._latest_non_empty(prior_queries, "date_range")
+
+        reference_tokens = {
+            "same",
+            "again",
+            "also",
+            "those",
+            "them",
+            "it",
+            "that",
+            "previous",
+            "before",
+        }
+        has_reference = any(token in normalized_query for token in reference_tokens)
+
+        used_memory = False
+
+        if (not parsed.metrics or has_reference) and latest_with_metrics:
+            for metric in latest_with_metrics.metrics:
+                if metric not in parsed.metrics:
+                    parsed.metrics.append(metric)
+                    used_memory = True
+
+        if (not parsed.dimensions or has_reference) and latest_with_dimensions:
+            for dimension in latest_with_dimensions.dimensions:
+                if dimension not in parsed.dimensions:
+                    parsed.dimensions.append(dimension)
+                    used_memory = True
+
+        if (not parsed.aggregations or has_reference) and latest_with_aggs:
+            for aggregation in latest_with_aggs.aggregations:
+                if aggregation not in parsed.aggregations:
+                    parsed.aggregations.append(aggregation)
+                    used_memory = True
+
+        if (not parsed.filters or has_reference) and latest_with_filters:
+            existing = {(flt.field, flt.operator, flt.value) for flt in parsed.filters}
+            for filter_condition in latest_with_filters.filters:
+                key = (filter_condition.field, filter_condition.operator, filter_condition.value)
+                if key not in existing:
+                    parsed.filters.append(filter_condition)
+                    existing.add(key)
+                    used_memory = True
+
+        if parsed.date_range is None and latest_with_dates and latest_with_dates.date_range is not None:
+            parsed.date_range = latest_with_dates.date_range
+            used_memory = True
+
+        parsed.memory_applied = used_memory
+        return parsed
+
+    @staticmethod
+    def _latest_non_empty(prior_queries: list[ParsedQuery], field_name: str) -> ParsedQuery | None:
+        for previous in reversed(prior_queries):
+            value = getattr(previous, field_name)
+            if value:
+                return previous
+        return None

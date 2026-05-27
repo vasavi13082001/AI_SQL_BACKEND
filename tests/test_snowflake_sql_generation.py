@@ -4,12 +4,14 @@ import pytest
 
 from app.schemas.snowflake import (
     ColumnMetadata,
+    ConversationTurn,
     RelationshipMetadata,
     SchemaMetadata,
     SnowflakeMetadataResponse,
     SnowflakeSQLGenerationRequest,
     TableMetadata,
 )
+from app.schemas.warehouse import WarehouseType
 from app.services.snowflake_sql_service import (
     SQLValidationError,
     SnowflakeSQLGenerationService,
@@ -336,3 +338,83 @@ def test_generate_sql_optimization_notes_include_snowflake_rules(monkeypatch):
     assert "relationship" in notes_text.lower()
     assert "nullability" in notes_text.lower()
     assert "LIMIT 1000" in notes_text
+
+
+def test_user_prompt_includes_conversation_context(monkeypatch):
+    metadata = _build_metadata()
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    captured: dict = {}
+
+    def fake_invoke(system_prompt: str, user_prompt: str, temperature: float) -> str:
+        captured["user"] = user_prompt
+        return "SELECT ORDER_ID FROM PUBLIC.ORDERS"
+
+    monkeypatch.setattr(service, "_invoke_llm", fake_invoke)
+    service.generate_sql(
+        SnowflakeSQLGenerationRequest(
+            prompt="Do the same for west",
+            metadata=metadata,
+            conversation_history=[
+                ConversationTurn(role="user", message="Show total revenue by region last 30 days"),
+                ConversationTurn(role="assistant", message="SELECT ..."),
+            ],
+            enforce_limit=True,
+            max_rows=250,
+            temperature=0.0,
+        )
+    )
+
+    assert "Conversation context" in captured["user"]
+    assert "Show total revenue by region last 30 days" in captured["user"]
+    assert "memory_applied=True" in captured["user"]
+
+
+def test_system_prompt_uses_redshift_rules(monkeypatch):
+    metadata = _build_metadata()
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    captured: dict = {}
+
+    def fake_invoke(system_prompt: str, user_prompt: str, temperature: float) -> str:
+        captured["system"] = system_prompt
+        return "SELECT ORDER_ID FROM PUBLIC.ORDERS"
+
+    monkeypatch.setattr(service, "_invoke_llm", fake_invoke)
+    service.generate_sql(
+        SnowflakeSQLGenerationRequest(
+            prompt="list orders",
+            metadata=metadata,
+            target_warehouse=WarehouseType.REDSHIFT,
+            enforce_limit=False,
+            max_rows=1000,
+            temperature=0.0,
+        )
+    )
+
+    assert "Target warehouse dialect: redshift" in captured["system"]
+    assert "CTE or subquery" in captured["system"]
+    assert "QUALIFY" not in captured["system"]
+
+
+def test_schema_context_limits_to_relevant_tables(monkeypatch):
+    metadata = _build_metadata()
+    service = SnowflakeSQLGenerationService(client=object(), model="test-model")
+    captured: dict = {}
+
+    def fake_invoke(system_prompt: str, user_prompt: str, temperature: float) -> str:
+        captured["system"] = system_prompt
+        return "SELECT CUSTOMER_NAME FROM PUBLIC.CUSTOMERS"
+
+    monkeypatch.setattr(service, "_invoke_llm", fake_invoke)
+    service.generate_sql(
+        SnowflakeSQLGenerationRequest(
+            prompt="List customer names",
+            metadata=metadata,
+            max_schema_tables=1,
+            enforce_limit=False,
+            max_rows=1000,
+            temperature=0.0,
+        )
+    )
+
+    assert "PUBLIC.CUSTOMERS" in captured["system"]
+    assert "PUBLIC.ORDERS" not in captured["system"]
