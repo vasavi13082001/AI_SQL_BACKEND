@@ -1,7 +1,16 @@
 """User request/response schemas."""
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+from enum import Enum
 from typing import Optional
+
+
+class UserRole(str, Enum):
+    """Allowed RBAC roles for API authorization."""
+
+    ANALYST = "analyst"
+    DATA_ENGINEER = "data_engineer"
+    ADMIN = "admin"
 
 
 class UserBase(BaseModel):
@@ -9,6 +18,7 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=255)
+    role: UserRole = Field(default=UserRole.ANALYST)
 
 
 class UserCreate(UserBase):
@@ -21,6 +31,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
+    role: Optional[UserRole] = None
 
 
 class UserResponse(UserBase):
@@ -41,4 +52,5 @@ class UserListResponse(BaseModel):
     email: str
     username: str
     full_name: Optional[str]
+    role: UserRole
     is_active: bool

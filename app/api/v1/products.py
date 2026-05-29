@@ -2,8 +2,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models import User
 from app.services.product_service import ProductService
 from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate, ProductListResponse
+from app.schemas.user import UserRole
+from app.services.auth_service import require_roles
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -13,6 +16,9 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 @router.get("/", response_model=list[ProductListResponse])
 async def list_products(
+    current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -32,6 +38,7 @@ async def list_products(
 @router.post("/", response_model=ProductResponse, status_code=201)
 async def create_product(
     product_create: ProductCreate,
+    current_user: User = Depends(require_roles(UserRole.DATA_ENGINEER, UserRole.ADMIN)),
     db: Session = Depends(get_db)
 ):
     """Create a new product."""
@@ -46,7 +53,13 @@ async def create_product(
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
-async def get_product(product_id: int, db: Session = Depends(get_db)):
+async def get_product(
+    product_id: int,
+    current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+    db: Session = Depends(get_db),
+):
     """Get a specific product by ID."""
     product = ProductService.get_product(db, product_id)
     if not product:
@@ -58,6 +71,9 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
 @router.get("/search/", response_model=list[ProductListResponse])
 async def search_products(
     q: str = Query(..., min_length=1),
+    current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
     db: Session = Depends(get_db)
 ):
     """Search products by name or description."""
@@ -70,6 +86,7 @@ async def search_products(
 async def update_product(
     product_id: int,
     product_update: ProductUpdate,
+    current_user: User = Depends(require_roles(UserRole.DATA_ENGINEER, UserRole.ADMIN)),
     db: Session = Depends(get_db)
 ):
     """Update a product's information."""
@@ -81,7 +98,11 @@ async def update_product(
 
 
 @router.delete("/{product_id}", status_code=204)
-async def delete_product(product_id: int, db: Session = Depends(get_db)):
+async def delete_product(
+    product_id: int,
+    current_user: User = Depends(require_roles(UserRole.DATA_ENGINEER, UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
     """Delete a product."""
     success = ProductService.delete_product(db, product_id)
     if not success:

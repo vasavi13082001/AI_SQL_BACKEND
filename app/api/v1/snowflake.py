@@ -1,7 +1,8 @@
 """Snowflake API endpoints."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from logging import getLogger
 
+from app.models import User
 from app.schemas.snowflake import (
     SnowflakeConnectionRequest,
     SnowflakeMetadataResponse,
@@ -13,6 +14,8 @@ from app.services.snowflake_sql_service import (
     SQLValidationError,
     SnowflakeSQLGenerationService,
 )
+from app.schemas.user import UserRole
+from app.services.auth_service import require_roles
 
 logger = getLogger(__name__)
 
@@ -20,7 +23,10 @@ router = APIRouter(prefix="/snowflake", tags=["snowflake"])
 
 
 @router.post("/extract", response_model=SnowflakeMetadataResponse)
-async def extract_snowflake_metadata(request: SnowflakeConnectionRequest):
+async def extract_snowflake_metadata(
+    request: SnowflakeConnectionRequest,
+    current_user: User = Depends(require_roles(UserRole.DATA_ENGINEER, UserRole.ADMIN)),
+):
     """Extract schemas, tables, columns, and relationships from Snowflake."""
     try:
         return SnowflakeMetadataService.extract_metadata(request)
@@ -36,7 +42,10 @@ async def extract_snowflake_metadata(request: SnowflakeConnectionRequest):
 
 
 @router.post("/generate-sql", response_model=SnowflakeSQLGenerationResponse)
-async def generate_snowflake_sql(request: SnowflakeSQLGenerationRequest):
+async def generate_snowflake_sql(
+    request: SnowflakeSQLGenerationRequest,
+    current_user: User = Depends(require_roles(UserRole.DATA_ENGINEER, UserRole.ADMIN)),
+):
     """Generate optimized and validated Snowflake SQL from natural language."""
     try:
         service = SnowflakeSQLGenerationService()

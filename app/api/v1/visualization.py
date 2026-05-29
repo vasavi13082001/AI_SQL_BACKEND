@@ -1,10 +1,13 @@
 """API endpoints for chart data transformation and visualization."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from logging import getLogger
 
+from app.models import User
 from app.schemas.visualization import ChartDataRequest, ChartDataResponse
+from app.schemas.user import UserRole
+from app.services.auth_service import require_roles
 from app.services.chart_data_transformer import transform_query_results
 
 logger = getLogger(__name__)
@@ -23,7 +26,12 @@ router = APIRouter(prefix="/visualization", tags=["Visualization"])
     ),
     status_code=status.HTTP_200_OK,
 )
-async def transform_to_chart(request: ChartDataRequest) -> ChartDataResponse:
+async def transform_to_chart(
+    request: ChartDataRequest,
+    _current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+) -> ChartDataResponse:
     """Transform raw query results into chart-ready data."""
     try:
         logger.info(
@@ -64,12 +72,17 @@ async def transform_to_chart(request: ChartDataRequest) -> ChartDataResponse:
     ),
     status_code=status.HTTP_200_OK,
 )
-async def create_line_chart(request: ChartDataRequest) -> ChartDataResponse:
+async def create_line_chart(
+    request: ChartDataRequest,
+    _current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+) -> ChartDataResponse:
     """Create line chart from query results."""
     from app.schemas.visualization import ChartType
     
     request.chart_type = ChartType.LINE
-    return await transform_to_chart(request)
+    return await transform_to_chart(request, _current_user)
 
 
 @router.post(
@@ -83,12 +96,17 @@ async def create_line_chart(request: ChartDataRequest) -> ChartDataResponse:
     ),
     status_code=status.HTTP_200_OK,
 )
-async def create_bar_chart(request: ChartDataRequest) -> ChartDataResponse:
+async def create_bar_chart(
+    request: ChartDataRequest,
+    _current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+) -> ChartDataResponse:
     """Create bar chart from query results."""
     from app.schemas.visualization import ChartType
     
     request.chart_type = ChartType.BAR
-    return await transform_to_chart(request)
+    return await transform_to_chart(request, _current_user)
 
 
 @router.post(
@@ -102,12 +120,17 @@ async def create_bar_chart(request: ChartDataRequest) -> ChartDataResponse:
     ),
     status_code=status.HTTP_200_OK,
 )
-async def create_pie_chart(request: ChartDataRequest) -> ChartDataResponse:
+async def create_pie_chart(
+    request: ChartDataRequest,
+    _current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+) -> ChartDataResponse:
     """Create pie chart from query results."""
     from app.schemas.visualization import ChartType
     
     request.chart_type = ChartType.PIE
-    return await transform_to_chart(request)
+    return await transform_to_chart(request, _current_user)
 
 
 @router.post(
@@ -121,9 +144,14 @@ async def create_pie_chart(request: ChartDataRequest) -> ChartDataResponse:
     ),
     status_code=status.HTTP_200_OK,
 )
-async def create_kpi_widget(request: ChartDataRequest) -> ChartDataResponse:
+async def create_kpi_widget(
+    request: ChartDataRequest,
+    _current_user: User = Depends(
+        require_roles(UserRole.ANALYST, UserRole.DATA_ENGINEER, UserRole.ADMIN)
+    ),
+) -> ChartDataResponse:
     """Create KPI widget from query results."""
     from app.schemas.visualization import ChartType
     
     request.chart_type = ChartType.KPI
-    return await transform_to_chart(request)
+    return await transform_to_chart(request, _current_user)
